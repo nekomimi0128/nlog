@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NLog</title>
+    <style>
+        /* === 完全オフライン対応のベーススタイル === */
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #16a34a;
+            --success-hover: #15803d;
+            --danger: #dc2626;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #d1d5db;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        /* ヘッダー */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .header-title { font-size: 24px; font-weight: bold; color: #1e40af; margin: 0; }
+        .header-desc { font-size: 14px; color: var(--text-muted); margin: 4px 0 0 0; }
+
+        /* レイアウト */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 1200px) {
+            .grid-container { grid-template-columns: 5fr 7fr; }
+        }
+
+        /* カード */
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .card-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* フォーム */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-grid-3 { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #374151;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+        .form-control.callsign {
+            font-size: 20px;
+            font-family: monospace;
+            text-transform: uppercase;
+        }
+
+        /* ボタン */
+        .btn {
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: background-color 0.2s, opacity 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; width: 100%; font-size: 16px; padding: 14px; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: white; padding: 12px 24px; font-size: 16px;}
+        .btn-success:hover { background: var(--success-hover); }
+        .btn-danger { background: #fee2e2; color: var(--danger); border: 1px solid #f87171; }
+        .btn-danger:hover { background: #fecaca; }
+        .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: #e5e7eb; color: var(--text-main); }
+        .btn-secondary:hover { background: #d1d5db; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        /* テーブル */
+        .table-wrapper {
+            overflow-x: auto;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        .table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        .table th { background: var(--bg-color); padding: 12px 16px; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--border-color); }
+        .table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+        .table tr:hover { background: #eff6ff; }
+        
+        /* 追加: ログ行とチェックボックスのスタイル */
+        .log-row { cursor: pointer; }
+        .checkbox-cell { text-align: center; }
+
+        /* ユーティリティ */
+        .text-center { text-align: center; }
+        .text-muted { color: var(--text-muted); }
+        .flex { display: flex; }
+        .justify-between { justify-content: space-between; }
+        .align-center { align-items: center; }
+        .gap-4 { gap: 16px; }
+        .gap-2 { gap: 8px; }
+        .mt-4 { margin-top: 16px; }
+        .mb-4 { margin-bottom: 16px; }
+
+        /* ================= プレビュー領域 ================= */
+        .print-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+        }
+        @media (min-width: 600px) {
+            .print-controls { flex-direction: row; justify-content: space-between; align-items: center; }
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        @media (min-width: 768px) {
+            .tools-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        .tool-panel {
+            background: #f9fafb;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .tool-title { font-size: 14px; font-weight: bold; margin: 0 0 8px 0; }
+        .tool-desc { font-size: 12px; color: var(--text-muted); margin: 0 0 12px 0; }
+
+        .preview-container {
+            overflow-x: auto;
+            background: #d1d5db;
+            padding: 24px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 2px solid #9ca3af;
+        }
+
+        /* 印刷対象の物理サイズラッパー */
+        #print-area-wrapper {
+            position: relative;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: width 0.3s, height 0.3s;
+        }
+
+        #placeholder-text {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            border: 2px dashed #d1d5db;
+            margin: 16px;
+            z-index: 0;
+        }
+
+        .qsl-bg-image {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: none;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #preview-canvas {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 10;
+        }
+
+        /* ドラッグアイテム */
+        .draggable-item {
+            position: absolute;
+            color: #000;
+            cursor: move;
+            user-select: none;
+            padding: 2px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            text-align: center;
+            white-space: pre-wrap;
+            line-height: 1.2;
+        }
+        .draggable-item:hover {
+            outline: 1px dashed #9ca3af;
+        }
+        .item-selected {
+            outline: 2px solid var(--primary) !important;
+            background-color: rgba(37, 99, 235, 0.1) !important;
+        }
+
+        .range-slider {
+            width: 100%;
+            margin-right: 12px;
+        }
+
+        /* 追加: モーダルのスタイル */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background-color: var(--card-bg); padding: 24px; border-radius: 12px;
+            width: 90%; max-width: 400px; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .close-btn {
+            position: absolute; top: 16px; right: 20px; font-size: 24px;
+            cursor: pointer; color: var(--text-muted); line-height: 1;
+        }
+        .close-btn:hover { color: var(--text-main); }
+        
+        @media screen {
+            .hide-on-screen { display: none !important; }
+        }
+
+        /* ================= 印刷用スタイル ================= */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area-wrapper, #print-area-wrapper * { visibility: visible; }
+            
+            /* 通常印刷時 */
+            #print-area-wrapper {
+                position: absolute !important;
+                left: 0 !important; top: 0 !important;
+                margin: 0 !important; padding: 0 !important;
+                box-shadow: none !important; border: none !important;
+            }
+
+            /* 一括印刷時 */
+            body.batch-printing #print-area-wrapper { display: none !important; }
+            body.batch-printing #batch-print-container { visibility: visible; display: block !important; position: absolute; left: 0; top: 0; }
+            body.batch-printing #batch-print-container * { visibility: visible; }
+            
+            .print-page {
+                position: relative !important;
+                margin: 0 !important; padding: 0 !important;
+                box-shadow: none !important; border: none !important;
+                page-break-after: always; /* 💡 ここで改ページ */
+                overflow: hidden;
+            }
+            .print-page:last-child {
+                page-break-after: auto;
+            }
+
+            /* 背景とプレースホルダーは印刷しない */
+            .qsl-bg-image, #placeholder-text { display: none !important; }
+            .hide-on-print { display: none !important; }
+            .preview-container { background: transparent !important; padding: 0 !important; border: none !important; }
+            .draggable-item { border: none !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
+            
+            @page { size: 148mm 100mm; margin: 0; }
+            body.portrait-print @page { size: 100mm 148mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header hide-on-print">
+        <div>
+            <h1 class="header-title">🗼 NLog</h1>
+            <p class="header-desc">ブラウザ完結・オフライン対応 交信ログ・印刷ツール</p>
+        </div>
+    </header>
+    
+    <div class="grid-container">
+        
+        <!-- ================= 左カラム：ログ入力・一覧 ================= -->
+        <div class="hide-on-print">
+            
+            <!-- ログ入力カード -->
+            <div class="card">
+                <h2 class="card-header">📝 新規交信ログ</h2>
+                <form id="log-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>日付</label>
+                            <input type="date" id="log-date" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label>時間</label>
+                            <input type="time" id="log-time" class="form-control" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>コールサイン</label>
+                        <input type="text" id="log-callsign" class="form-control callsign" placeholder="JA1XXX" required autocomplete="off">
+                    </div>
+                    
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label>モード</label>
+                            <select id="log-mode" class="form-control">
+                                <option>SSB</option>
+                                <option>CW</option>
+                                <option>FM</option>
+                                <option>AM</option>
+                                <option>FT8</option>
+                                <option>D-STAR</option>
+                                <option>C4FM</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>周波数 (MHz)</label>
+                            <input type="text" id="log-freq" class="form-control" placeholder="7.050">
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>RS(T)</label>
+                            <input type="text" id="log-rst" class="form-control" placeholder="59" value="59">
+                        </div>
+                        <div class="form-group">
+                            <label>QTH / Location</label>
+                            <input type="text" id="log-loc" class="form-control" placeholder="東京都千代田区">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>備考 (D-STAR REF等)</label>
+                        <input type="text" id="log-rem" class="form-control" placeholder="REF001 A">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        💾 ログを保存
+                    </button>
+                </form>
+            </div>
+
+            <!-- ログ一覧カード -->
+            <div class="card">
+                <h2 class="card-header justify-between">
+                    <span>📋 交信履歴</span>
+                    <div class="flex gap-2" style="flex-wrap: wrap;">
+                        <button id="batch-export-csv-btn" class="btn btn-secondary btn-sm">📄 CSV</button>
+                        <button id="batch-export-adif-btn" class="btn btn-secondary btn-sm">📄 ADIF</button>
+                        <button id="batch-print-btn" class="btn btn-success btn-sm">🖨️ 選択印刷</button>
+                        <button id="batch-delete-btn" class="btn btn-danger btn-sm">🗑️ 選択削除</button>
+                    </div>
+                </h2>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px; text-align: center;"><input type="checkbox" id="check-all-logs"></th>
+                                <th>日時</th>
+                                <th>コールサイン</th>
+                                <th style="text-align:center;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-table-body">
+                            <tr>
+                                <td colspan="4" class="text-center text-muted" style="padding:24px;">まだログがありません。</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 右カラム：QSL印刷 ================= -->
+        <div>
+            <div class="card" style="margin-bottom: 0;">
+                <div class="print-controls hide-on-print">
+                    <h2 class="card-header" style="border:none; margin:0; padding:0;">🖨️ QSLカード ダイレクト印字</h2>
+                    <button id="print-btn" class="btn btn-success">
+                        🖨️ 印刷する (単一)
+                    </button>
+                </div>
+                
+                <div class="tools-grid hide-on-print">
+                    <!-- ステップ1: 画像アップロード -->
+                    <div class="tool-panel">
+                        <p class="tool-title">1. QSL用紙の画像をセット</p>
+                        <p class="tool-desc">スキャンした白紙のQSLカードを読み込みます。（印刷時は消えます）</p>
+                        <input type="file" id="bg-image-upload" accept="image/*" style="font-size: 14px; width: 100%;">
+                    </div>
+                    
+                    <!-- コントロールパネル -->
+                    <div class="tool-panel">
+                        <p class="tool-title">選択中のテキスト調整</p>
+                        
+                        <div class="flex align-center mb-4">
+                            <span style="margin-right:8px; font-weight:bold;">A</span>
+                            <input type="range" id="font-size-slider" min="10" max="72" value="18" class="range-slider">
+                            <span id="font-size-display" style="width:40px; text-align:right; font-size:14px; font-weight:bold; color:var(--primary);">18px</span>
+                        </div>
+                        
+                        <button id="delete-item-btn" disabled class="btn btn-danger btn-sm" style="width:100%;">
+                            🗑️ 選択項目をこのカードから削除
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex justify-between align-center mb-4 hide-on-print">
+                    <p style="font-size:14px; font-weight:bold; color:var(--primary); margin:0;">2. テキストをドラッグして位置を合わせる</p>
+                    <div class="flex gap-2">
+                        <button id="reset-layout-btn" class="btn btn-secondary btn-sm" title="消した項目も元に戻ります">
+                            🔄 配置をリセット
+                        </button>
+                        <button id="rotate-btn" class="btn btn-secondary btn-sm">
+                            🔄 縦横切替
+                        </button>
+                    </div>
+                </div>
+
+                <!-- プレビューコンテナ（ハガキサイズ） -->
+                <div class="preview-container hide-on-print-bg">
+                    
+                    <!-- 物理サイズを設定したラッパー。ここが印刷対象 -->
+                    <div id="print-area-wrapper" style="width: 148mm; height: 100mm;">
+                        
+                        <!-- 背景画像 -->
+                        <img id="qsl-bg" src="" alt="" class="qsl-bg-image">
+                        
+                        <!-- 初期メッセージ -->
+                        <div id="placeholder-text">
+                            <span style="font-size: 32px; margin-bottom:8px;">🖼️</span>
+                            <p>QSLカード画像をアップロードしてください</p>
+                        </div>
+
+                        <!-- ドラッグ可能なテキストが配置されるキャンバス層 -->
+                        <div id="preview-canvas">
+                            <!-- テキストアイテムがここにJSで追加される -->
+                        </div>
+                    </div>
+                </div>
+                
+                <p class="text-xs mt-4 hide-on-print">ℹ️ ※ブラウザの印刷ダイアログが開いたら、用紙サイズを「ハガキ」、余白を「なし（または最小）」に設定してください。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ログ詳細モーダル -->
+    <div id="log-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="close-modal">&times;</span>
+            <h2 id="modal-callsign" style="margin-top:0; border-bottom:1px solid #d1d5db; padding-bottom:10px;"></h2>
+            <table class="table" style="border:1px solid #d1d5db; border-radius:6px; overflow:hidden;">
+                <tbody id="modal-details">
+                    <!-- JSで詳細が挿入される -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 一括印刷用の隠しコンテナ -->
+    <div id="batch-print-container" class="hide-on-screen"></div>
+
+    <script>
+        // === 状態管理 ===
+        let logs = JSON.parse(localStorage.getItem('hamlog_logs')) || [];
+        let isLandscape = true; // プレビューの向き (true=横, false=縦)
+        
+        // 配置状態を記憶するオブジェクト
+        let savedLayout = JSON.parse(localStorage.getItem('hamlog_layout')) || {}; 
+        
+        // データ保存用ヘルパー関数
+        function saveLogs() {
+            localStorage.setItem('hamlog_logs', JSON.stringify(logs));
+        }
+        function saveLayout() {
+            localStorage.setItem('hamlog_layout', JSON.stringify(savedLayout));
+        }
+
+        // --- 初期化 ---
+        function setNow() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('log-date').value = `${year}-${month}-${day}`;
+            document.getElementById('log-time').value = `${hours}:${minutes}`;
+        }
+        setNow();
+
+        // --- ログ登録処理 ---
+        document.getElementById('log-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const log = {
+                id: Date.now().toString(),
+                date: document.getElementById('log-date').value,
+                time: document.getElementById('log-time').value,
+                callsign: document.getElementById('log-callsign').value.toUpperCase(),
+                mode: document.getElementById('log-mode').value,
+                freq: document.getElementById('log-freq').value,
+                rst: document.getElementById('log-rst').value,
+                loc: document.getElementById('log-loc').value,
+                rem: document.getElementById('log-rem').value
+            };
+            
+            logs.unshift(log); // 最新を上に
+            saveLogs();
+            renderLogs();
+            
+            document.getElementById('log-callsign').value = '';
+            document.getElementById('log-rst').value = '59';
+            document.getElementById('log-loc').value = '';
+            document.getElementById('log-rem').value = '';
+            document.getElementById('log-callsign').focus();
+        });
+
+        // --- ログ一覧描画 ---
+        function renderLogs() {
+            const tbody = document.getElementById('log-table-body');
+            tbody.innerHTML = '';
+            
+            // 描画更新時に全選択チェックを外す
+            document.getElementById('check-all-logs').checked = false;
+            
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted" style="padding:24px;">まだログがありません。</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.className = 'log-row';
+                // 💡 行クリックで詳細表示（モーダルを開く）
+                tr.onclick = (e) => {
+                    // チェックボックスやボタンをクリックした時はモーダルを開かない
+                    if(e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) {
+                        return;
+                    }
+                    showLogDetails(log);
+                };
+
+                tr.innerHTML = `
+                    <td class="checkbox-cell" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="log-check" value="${log.id}">
+                    </td>
+                    <td style="white-space:nowrap;">${log.date} ${log.time}</td>
+                    <td style="font-family:monospace; font-weight:bold; font-size:16px;">${log.callsign}</td>
+                    <td class="text-center" onclick="event.stopPropagation()">
+                        <button onclick="setupQSL('${log.id}')" class="btn btn-primary btn-sm" style="width:auto; padding:6px 12px;">
+                            📤 QSL配置
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- モーダル詳細表示の処理 ---
+        function showLogDetails(log) {
+            document.getElementById('modal-callsign').textContent = log.callsign;
+            const details = `
+                <tr><th style="width:30%; background:#f3f4f6;">日付</th><td>${log.date}</td></tr>
+                <tr><th style="background:#f3f4f6;">時間</th><td>${log.time}</td></tr>
+                <tr><th style="background:#f3f4f6;">モード</th><td>${log.mode}</td></tr>
+                <tr><th style="background:#f3f4f6;">周波数</th><td>${log.freq ? log.freq + ' MHz' : '-'}</td></tr>
+                <tr><th style="background:#f3f4f6;">RS(T)</th><td>${log.rst}</td></tr>
+                <tr><th style="background:#f3f4f6;">QTH/Loc</th><td>${log.loc || '-'}</td></tr>
+                <tr><th style="background:#f3f4f6;">備考</th><td>${log.rem || '-'}</td></tr>
+            `;
+            document.getElementById('modal-details').innerHTML = details;
+            document.getElementById('log-modal').classList.add('show');
+        }
+
+        // モーダルを閉じる処理
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('log-modal').classList.remove('show');
+        });
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('log-modal');
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+
+        // 全選択チェックボックスの処理
+        document.getElementById('check-all-logs').addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            document.querySelectorAll('.log-check').forEach(cb => {
+                cb.checked = isChecked;
+            });
+        });
+
+        // --- 一括削除処理 ---
+        document.getElementById('batch-delete-btn').addEventListener('click', () => {
+            const checkedBoxes = document.querySelectorAll('.log-check:checked');
+            if (checkedBoxes.length === 0) return;
+
+            const idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
+            logs = logs.filter(log => !idsToDelete.includes(log.id));
+            
+            saveLogs();
+            renderLogs();
+        });
+
+        // --- ファイルダウンロード用ヘルパー ---
+        function downloadFile(content, fileName, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- バイト数計算 (ADIF用) ---
+        function getByteCount(str) {
+            return new Blob([str]).size;
+        }
+
+        // --- 選択したログを取得するヘルパー ---
+        function getSelectedLogs() {
+            const checkedBoxes = document.querySelectorAll('.log-check:checked');
+            if (checkedBoxes.length === 0) {
+                // UI崩れを防ぐためalertの代わりに直接returnしますが、必要に応じて通知UIを追加できます
+                return [];
+            }
+            const ids = Array.from(checkedBoxes).map(cb => cb.value);
+            return logs.filter(log => ids.includes(log.id));
+        }
+
+        // --- CSVエクスポート処理 ---
+        document.getElementById('batch-export-csv-btn').addEventListener('click', () => {
+            const targetLogs = getSelectedLogs();
+            if (targetLogs.length === 0) return;
+
+            let csvContent = "\uFEFF"; // Excelでの文字化けを防ぐBOM
+            csvContent += "Date,Time,Callsign,Mode,Freq,RST,QTH,Remarks\n";
+            
+            targetLogs.forEach(log => {
+                const escapeCsv = (str) => {
+                    if (str == null) return "";
+                    let s = String(str);
+                    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+                        s = '"' + s.replace(/"/g, '""') + '"';
+                    }
+                    return s;
+                };
+                const row = [
+                    escapeCsv(log.date),
+                    escapeCsv(log.time),
+                    escapeCsv(log.callsign),
+                    escapeCsv(log.mode),
+                    escapeCsv(log.freq),
+                    escapeCsv(log.rst),
+                    escapeCsv(log.loc),
+                    escapeCsv(log.rem)
+                ].join(",");
+                csvContent += row + "\n";
+            });
+            downloadFile(csvContent, "nlog_export.csv", "text/csv;charset=utf-8;");
+        });
+
+        // --- ADIFエクスポート処理 ---
+        document.getElementById('batch-export-adif-btn').addEventListener('click', () => {
+            const targetLogs = getSelectedLogs();
+            if (targetLogs.length === 0) return;
+
+            let adifText = "Created by NLog\n<PROGRAMID:4>NLog\n<EOH>\n";
+            
+            // 古い順にエクスポートしたい場合は .reverse() を挟むと良いかもしれません
+            targetLogs.forEach(log => {
+                const call = log.callsign || "";
+                const date = (log.date || "").replace(/-/g, ''); // YYYY-MM-DD -> YYYYMMDD
+                const time = (log.time || "").replace(/:/g, ''); // HH:MM -> HHMM
+                const mode = log.mode || "";
+                const freq = log.freq || "";
+                const rst = log.rst || "";
+                const qth = log.loc || "";
+                const rem = log.rem || "";
+
+                let record = "";
+                if(call) record += `<CALL:${getByteCount(call)}>${call} `;
+                if(date) record += `<QSO_DATE:${getByteCount(date)}>${date} `;
+                if(time) record += `<TIME_ON:${getByteCount(time)}>${time} `;
+                if(mode) record += `<MODE:${getByteCount(mode)}>${mode} `;
+                if(freq) record += `<FREQ:${getByteCount(freq)}>${freq} `;
+                if(rst) {
+                    record += `<RST_SENT:${getByteCount(rst)}>${rst} <RST_RCVD:${getByteCount(rst)}>${rst} `;
+                }
+                if(qth) record += `<QTH:${getByteCount(qth)}>${qth} `;
+                if(rem) record += `<COMMENT:${getByteCount(rem)}>${rem} `;
+                
+                record += "<EOR>\n";
+                adifText += record;
+            });
+            downloadFile(adifText, "nlog_export.adi", "text/plain;charset=utf-8;");
+        });
+
+        // --- 一括印刷処理 ---
+        document.getElementById('batch-print-btn').addEventListener('click', () => {
+            const checkedBoxes = document.querySelectorAll('.log-check:checked');
+            if (checkedBoxes.length === 0) return;
+
+            const container = document.getElementById('batch-print-container');
+            container.innerHTML = ''; // クリア
+
+            const idsToPrint = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            idsToPrint.forEach(id => {
+                const log = logs.find(l => l.id === id);
+                if (!log) return;
+
+                // ページ単位のコンテナを作成
+                const page = document.createElement('div');
+                page.className = 'print-page';
+                if (isLandscape) {
+                    page.style.width = '148mm';
+                    page.style.height = '100mm';
+                } else {
+                    page.style.width = '100mm';
+                    page.style.height = '148mm';
+                }
+
+                // 項目データを定義
+                const items = [
+                    { id: 'qsl-call', text: log.callsign },
+                    { id: 'qsl-datetime', text: `${log.date}\n${log.time}` },
+                    { id: 'qsl-rst', text: log.rst },
+                    { id: 'qsl-mode', text: log.mode },
+                    { id: 'qsl-freq', text: log.freq ? `${log.freq} MHz` : '' },
+                    { id: 'qsl-loc', text: log.loc },
+                    { id: 'qsl-rem', text: log.rem }
+                ];
+
+                let defaultTop = 20;
+
+                // 要素をページに配置
+                items.forEach(item => {
+                    if(!item.text.trim()) return; 
+                    if (savedLayout[item.id] && savedLayout[item.id].deleted) return; 
+                    
+                    const div = document.createElement('div');
+                    div.className = 'draggable-item';
+                    div.textContent = item.text;
+                    
+                    if (savedLayout[item.id]) {
+                        div.style.left = savedLayout[item.id].left;
+                        div.style.top = savedLayout[item.id].top;
+                        div.style.fontSize = savedLayout[item.id].fontSize;
+                    } else {
+                        div.style.left = '20px';
+                        div.style.top = `${defaultTop}px`;
+                        div.style.fontSize = '18px';
+                        defaultTop += 40;
+                    }
+                    page.appendChild(div);
+                });
+
+                container.appendChild(page);
+            });
+
+            // 印刷用のクラスを付与
+            document.body.classList.add('batch-printing');
+            
+            // 描画反映を待ってから印刷ダイアログを展開
+            setTimeout(() => {
+                window.print();
+                
+                // ダイアログ終了後、状態を戻す
+                setTimeout(() => {
+                    document.body.classList.remove('batch-printing');
+                    container.innerHTML = '';
+                }, 1000);
+            }, 100);
+        });
+
+        // --- QSLプレビューへのデータ配置 (単一配置) ---
+        window.setupQSL = function(id) {
+            const log = logs.find(l => l.id === id);
+            if (!log) return;
+            
+            const canvas = document.getElementById('preview-canvas');
+            canvas.innerHTML = ''; 
+            clearSelection(); 
+            
+            const items = [
+                { id: 'qsl-call', text: log.callsign },
+                { id: 'qsl-datetime', text: `${log.date}\n${log.time}` },
+                { id: 'qsl-rst', text: log.rst },
+                { id: 'qsl-mode', text: log.mode },
+                { id: 'qsl-freq', text: log.freq ? `${log.freq} MHz` : '' },
+                { id: 'qsl-loc', text: log.loc },
+                { id: 'qsl-rem', text: log.rem }
+            ];
+
+            let defaultTop = 20;
+
+            items.forEach(item => {
+                if(!item.text.trim()) return; 
+                if (savedLayout[item.id] && savedLayout[item.id].deleted) return; 
+                
+                const div = document.createElement('div');
+                div.className = 'draggable-item';
+                div.id = item.id;
+                div.textContent = item.text; 
+                
+                if (savedLayout[item.id]) {
+                    div.style.left = savedLayout[item.id].left;
+                    div.style.top = savedLayout[item.id].top;
+                    div.style.fontSize = savedLayout[item.id].fontSize;
+                } else {
+                    div.style.left = '20px';
+                    div.style.top = `${defaultTop}px`;
+                    div.style.fontSize = '18px';
+                    defaultTop += 40; 
+                }
+                
+                canvas.appendChild(div);
+            });
+            
+            document.getElementById('print-area-wrapper').scrollIntoView({behavior: 'smooth', block: 'center'});
+        }
+
+        // --- レイアウト記憶を更新する関数 ---
+        function updateSavedLayout(element) {
+            if (!element || !element.id) return;
+            savedLayout[element.id] = {
+                left: element.style.left,
+                top: element.style.top,
+                fontSize: element.style.fontSize,
+                deleted: false
+            };
+            saveLayout(); 
+        }
+
+        // --- 配置リセット機能 ---
+        document.getElementById('reset-layout-btn').addEventListener('click', () => {
+            savedLayout = {}; 
+            saveLayout(); 
+            if (logs.length > 0) {
+                setupQSL(logs[0].id);
+            } else {
+                document.getElementById('preview-canvas').innerHTML = '';
+            }
+        });
+        
+        // === 画像アップロードと復元処理 ===
+        const savedBg = localStorage.getItem('hamlog_bg');
+        if (savedBg) {
+            const bgImg = document.getElementById('qsl-bg');
+            bgImg.src = savedBg;
+            bgImg.style.display = 'block';
+            document.getElementById('placeholder-text').style.display = 'none';
+        }
+
+        document.getElementById('bg-image-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const bgImg = document.getElementById('qsl-bg');
+                    bgImg.src = event.target.result;
+                    bgImg.style.display = 'block';
+                    document.getElementById('placeholder-text').style.display = 'none';
+                    try {
+                        localStorage.setItem('hamlog_bg', event.target.result); 
+                    } catch (err) {
+                        console.warn("画像サイズが大きすぎるため、保存できませんでした。");
+                    }
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // === 縦・横 切り替え処理 ===
+        document.getElementById('rotate-btn').addEventListener('click', () => {
+            isLandscape = !isLandscape;
+            const wrapper = document.getElementById('print-area-wrapper');
+            if (isLandscape) {
+                wrapper.style.width = '148mm';
+                wrapper.style.height = '100mm';
+                document.body.classList.remove('portrait-print');
+            } else {
+                wrapper.style.width = '100mm';
+                wrapper.style.height = '148mm';
+                document.body.classList.add('portrait-print');
+            }
+        });
+
+        // === ドラッグ＆ドロップ実装 ===
+        const canvas = document.getElementById('preview-canvas');
+        let activeItem = null;
+        let isDragging = false;
+        let startPos = { x: 0, y: 0 };
+
+        function clearSelection() {
+            document.querySelectorAll('.draggable-item').forEach(el => {
+                el.classList.remove('item-selected');
+            });
+            activeItem = null;
+            document.getElementById('delete-item-btn').disabled = true;
+        }
+
+        function handleDragStart(e) {
+            if (e.target.classList.contains('draggable-item')) {
+                clearSelection();
+                
+                activeItem = e.target;
+                activeItem.classList.add('item-selected');
+                isDragging = true;
+                
+                document.getElementById('delete-item-btn').disabled = false;
+                const size = parseInt(window.getComputedStyle(activeItem).fontSize) || 18;
+                document.getElementById('font-size-slider').value = size;
+                document.getElementById('font-size-display').textContent = `${size}px`;
+
+                const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                
+                const rect = activeItem.getBoundingClientRect();
+                startPos = {
+                     x: clientX - rect.left,
+                     y: clientY - rect.top
+                };
+                
+                if (e.type.includes('touch')) e.preventDefault();
+            } else if (e.target.id === 'preview-canvas' || e.target.id === 'print-area-wrapper') {
+                clearSelection();
+            }
+        }
+
+        function handleDragMove(e) {
+            if (isDragging && activeItem) {
+                const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                
+                const canvasRect = canvas.getBoundingClientRect();
+                
+                let newLeft = clientX - canvasRect.left - startPos.x;
+                let newTop = clientY - canvasRect.top - startPos.y;
+                
+                activeItem.style.left = `${newLeft}px`;
+                activeItem.style.top = `${newTop}px`;
+                
+                if (e.type.includes('touch')) e.preventDefault();
+            }
+        }
+
+        function handleDragEnd() {
+            if (isDragging && activeItem) {
+                isDragging = false;
+                updateSavedLayout(activeItem);
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleDragStart);
+        window.addEventListener('mousemove', handleDragMove);
+        window.addEventListener('mouseup', handleDragEnd);
+        canvas.addEventListener('touchstart', handleDragStart, { passive: false });
+        window.addEventListener('touchmove', handleDragMove, { passive: false });
+        window.addEventListener('touchend', handleDragEnd);
+
+        // === フォントサイズ変更 ===
+        const fontSizeSlider = document.getElementById('font-size-slider');
+        const fontSizeDisplay = document.getElementById('font-size-display');
+        
+        fontSizeSlider.addEventListener('input', (e) => {
+            const newSize = e.target.value;
+            fontSizeDisplay.textContent = `${newSize}px`;
+            if (activeItem) {
+                activeItem.style.fontSize = `${newSize}px`;
+                updateSavedLayout(activeItem);
+            }
+        });
+
+        // === 選択項目の削除 ===
+        document.getElementById('delete-item-btn').addEventListener('click', () => {
+            if (activeItem) {
+                savedLayout[activeItem.id] = { deleted: true };
+                saveLayout(); 
+                activeItem.remove();
+                clearSelection();
+            }
+        });
+
+        // === 印刷実行 (単一) ===
+        document.getElementById('print-btn').addEventListener('click', () => {
+            clearSelection();
+            setTimeout(() => {
+                window.print();
+            }, 100);
+        });
+
+        // 起動時に保存されたログを表示
+        renderLogs();
+
+    </script>
+</body>
+</html>
