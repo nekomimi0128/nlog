@@ -403,6 +403,8 @@
                 <h2 class="card-header justify-between">
                     <span>📋 交信履歴</span>
                     <div class="flex gap-2" style="flex-wrap: wrap;">
+                        <input type="file" id="import-file-input" accept=".csv,.adi,.adif" style="display: none;">
+                        <button id="import-btn" class="btn btn-secondary btn-sm" onclick="document.getElementById('import-file-input').click()">📥 インポート</button>
                         <button id="batch-export-csv-btn" class="btn btn-secondary btn-sm">📄 CSV</button>
                         <button id="batch-export-adif-btn" class="btn btn-secondary btn-sm">📄 ADIF</button>
                         <button id="batch-print-btn" class="btn btn-success btn-sm">🖨️ 選択印刷</button>
@@ -1053,6 +1055,152 @@
                 window.print();
             }, 100);
         });
+
+        // === インポート処理 (CSV / ADIF) ===
+        document.getElementById('import-file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                const fileName = file.name.toLowerCase();
+                let importedLogs = [];
+
+                if (fileName.endsWith('.csv')) {
+                    importedLogs = parseCSV(text);
+                } else if (fileName.endsWith('.adi') || fileName.endsWith('.adif')) {
+                    importedLogs = parseADIF(text);
+                }
+
+                if (importedLogs.length > 0) {
+                    logs = [...importedLogs, ...logs];
+                    // 日付・時間で降順ソート (新しいものを上に)
+                    logs.sort((a, b) => {
+                        const dtA = Date.parse(`${a.date}T${a.time}`) || 0;
+                        const dtB = Date.parse(`${b.date}T${b.time}`) || 0;
+                        return dtB - dtA;
+                    });
+                    
+                    saveLogs();
+                    renderLogs();
+                    
+                    // アラートを使わずにボタンの一時的なテキスト変更で通知する
+                    const btn = document.getElementById('import-btn');
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = `✅ ${importedLogs.length}件 追加`;
+                    btn.classList.add('btn-success');
+                    btn.classList.remove('btn-secondary');
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-secondary');
+                    }, 3000);
+                }
+                
+                // 次回も同じファイルを選択できるようにクリア
+                e.target.value = '';
+            };
+            
+            reader.readAsText(file);
+        });
+
+        // 簡易CSVパーサー
+        function parseCSV(csvText) {
+            const lines = csvText.split(/\r?\n/);
+            const newLogs = [];
+            // ヘッダー行以降を処理
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                let inQuotes = false;
+                let currentVal = '';
+                const values = [];
+                for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"' && line[j+1] === '"') {
+                        currentVal += '"';
+                        j++;
+                    } else if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        values.push(currentVal);
+                        currentVal = '';
+                    } else {
+                        currentVal += char;
+                    }
+                }
+                values.push(currentVal);
+
+                if (values.length >= 3 && values[2]) { // 最低限Callsignが必要
+                    newLogs.push({
+                        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                        date: values[0] || '',
+                        time: values[1] || '',
+                        callsign: (values[2] || '').toUpperCase(),
+                        mode: values[3] || '',
+                        freq: values[4] || '',
+                        rst: values[5] || '',
+                        loc: values[6] || '',
+                        rem: values[7] || ''
+                    });
+                }
+            }
+            return newLogs;
+        }
+
+        // 簡易ADIFパーサー
+        function parseADIF(adifText) {
+            const newLogs = [];
+            const parts = adifText.split(/<[eE][oO][hH]>/);
+            const dataPart = parts.length > 1 ? parts[1] : parts[0]; 
+
+            const records = dataPart.split(/<[eE][oO][rR]>/);
+            records.forEach(rec => {
+                if (!rec.trim()) return;
+                const log = {
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                    date: '', time: '', callsign: '', mode: '', freq: '', rst: '', loc: '', rem: ''
+                };
+                
+                const tagRegex = /<([A-Z0-9_]+)(?::\d+)?(?::[A-Z])?>([^<]*)/gi;
+                let match;
+                let hasData = false;
+                while ((match = tagRegex.exec(rec)) !== null) {
+                    const tag = match[1].toUpperCase();
+                    const value = match[2].trim();
+                    hasData = true;
+                    
+                    switch (tag) {
+                        case 'CALL': log.callsign = value.toUpperCase(); break;
+                        case 'QSO_DATE': 
+                            if (value.length >= 8) {
+                                log.date = `${value.substring(0,4)}-${value.substring(4,6)}-${value.substring(6,8)}`;
+                            } else {
+                                log.date = value;
+                            }
+                            break;
+                        case 'TIME_ON':
+                            if (value.length >= 4) {
+                                log.time = `${value.substring(0,2)}:${value.substring(2,4)}`;
+                            } else {
+                                log.time = value;
+                            }
+                            break;
+                        case 'MODE': log.mode = value; break;
+                        case 'FREQ': log.freq = value; break;
+                        case 'RST_SENT': log.rst = value; break;
+                        case 'QTH': log.loc = value; break;
+                        case 'COMMENT': log.rem = value; break;
+                    }
+                }
+                if (hasData && log.callsign) {
+                    newLogs.push(log);
+                }
+            });
+            return newLogs;
+        }
 
         // 起動時に保存されたログを表示
         renderLogs();
