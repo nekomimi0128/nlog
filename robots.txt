@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nlog.nekomimi0128.com/sitemap.xml
